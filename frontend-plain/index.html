@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>DJ Sanghvi Lost & Found Portal</title>
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="theme-color" content="#2b6df6" />
+</head>
+<body>
+  <header class="college-header">
+    <div class="container">
+      <img src="https://cdn.builder.io/api/v1/image/assets%2Fdc9427deb4f041ffb6f08fbcf1091235%2Fd04ac90bfe6c42fd9bdc649a683b18d1?format=webp&width=1200" alt="college header" />
+    </div>
+  </header>
+
+  <nav class="site-nav">
+    <div class="container nav-inner">
+      <div class="brand"><div class="brand-logo">DJS</div><div class="brand-text"><strong>DJ Sanghvi</strong><small>Lost & Found</small></div></div>
+      <ul class="nav-links"><li><a href="#found">Found</a></li><li><a href="#lost">Lost</a></li><li><a href="#gallery">Items</a></li></ul>
+      <a class="btn btn-primary" href="#found">Report Item</a>
+    </div>
+  </nav>
+
+  <main class="page">
+    <section class="hero container">
+      <h1>DJ Sanghvi Lost & Found Portal</h1>
+      <p>Report found or lost items and browse recently submitted belongings. Help the DJS community reconnect with their things.</p>
+    </section>
+
+    <section id="found" class="container form-section">
+      <div class="card framed">
+        <h2>Report a Found Item</h2>
+        <form id="foundForm" class="grid-2">
+          <label>Item Name <input name="itemName" required></label>
+          <label>Location Found <input name="locationFound" required></label>
+          <label>Date Found <input name="dateFound" type="date" required></label>
+          <label>Uploader's Name <input name="uploaderName" required></label>
+          <label class="full">Description <textarea name="description" required></textarea></label>
+          <label>Contact Info <input name="contact" required></label>
+          <label>Upload Photo <input name="photo" type="file" accept="image/*" required></label>
+          <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="lost" class="container form-section">
+      <div class="card framed">
+        <h2>Report a Lost Item</h2>
+        <form id="lostForm" class="grid-2">
+          <label>Item Name <input name="itemName" required></label>
+          <label>Location Lost <input name="locationLost" required></label>
+          <label>Date Lost <input name="dateLost" type="date" required></label>
+          <label>Owner's Name <input name="ownerName" required></label>
+          <label class="full">Description <textarea name="description" required></textarea></label>
+          <label>Contact Info <input name="contact" required></label>
+          <label>Upload Photo (optional) <input name="photo" type="file" accept="image/*"></label>
+          <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+      </div>
+    </section>
+
+    <section id="gallery" class="container gallery-section">
+      <h2>Approved Lost & Found Items</h2>
+      <div id="itemsGrid" class="grid-cards"></div>
+    </section>
+  </main>
+
+  <script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+  import { getDatabase, ref, push, set, onValue } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-database.js";
+  import { getStorage, ref as sRef, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-storage.js";
+
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyDEJKnW6ees67aE-ASdVL3PONMPTFq0ULE",
+  authDomain: "lost-found-portal-c8e46.firebaseapp.com",
+  databaseURL: "https://lost-found-portal-c8e46-default-rtdb.firebaseio.com",
+  projectId: "lost-found-portal-c8e46",
+  storageBucket: "lost-found-portal-c8e46.appspot.com",
+  messagingSenderId: "543242831455",
+  appId: "1:543242831455:web:3e8460967432848e2d3dea",
+  measurementId: "G-67XDSTXX9H"
+};
+
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+  const storage = getStorage(app);
+
+  // ---------- Handle Found Form ----------
+  const foundForm = document.getElementById("foundForm");
+  foundForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    console.log("Found form submitted ✅");
+    const data = Object.fromEntries(new FormData(foundForm).entries());
+    const file = foundForm.photo.files[0];
+    let photoUrl = "";
+
+    try {
+      if (file) {
+        const storageRef = sRef(storage, "found_items/" + file.name);
+        await uploadBytes(storageRef, file);
+        photoUrl = await getDownloadURL(storageRef);
+      }
+
+      const newRef = push(ref(db, "reports/found"));
+      await set(newRef, {
+        ...data,
+        photoUrl,
+        status: "pending", // for admin review
+        timestamp: new Date().toISOString()
+      });
+
+      alert("Found item reported! Awaiting admin approval.");
+      foundForm.reset();
+    } catch (err) {
+      console.error(err);
+      alert("Error submitting found item.");
+    }
+  });
+
+  // ---------- Handle Lost Form ----------
+  const lostForm = document.getElementById("lostForm");
+  lostForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    console.log("lost form submitted ✅");
+    const data = Object.fromEntries(new FormData(lostForm).entries());
+    const file = lostForm.photo.files[0];
+    let photoUrl = "";
+
+    try {
+      if (file) {
+        const storageRef = sRef(storage, "lost_items/" + file.name);
+        await uploadBytes(storageRef, file);
+        photoUrl = await getDownloadURL(storageRef);
+      }
+
+      const newRef = push(ref(db, "reports/lost"));
+      await set(newRef, {
+        ...data,
+        photoUrl,
+        status: "pending",
+        timestamp: new Date().toISOString()
+      });
+
+      alert("Lost item reported! Awaiting admin approval.");
+      lostForm.reset();
+    } catch (err) {
+      console.error(err);
+      alert("Error submitting lost item.");
+    }
+  });
+</script>
+
+</body>
+</html>

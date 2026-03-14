@@ -36,11 +36,20 @@ const app = express();
 const PORT = 5000;
 
 app.use(cors({
-  origin: [
-    "http://localhost:8080",
-    "http://localhost:5173",
-    "https://lost-and-found-portal-alpha.vercel.app"
-  ]
+  origin: function(origin, callback) {
+    const allowed = [
+      "http://localhost:8080",
+      "http://localhost:5173",
+      "https://lost-and-found-portal-alpha.vercel.app"
+    ];
+    // Allow any Vercel preview deployments
+    if (!origin || allowed.includes(origin) || origin.endsWith(".vercel.app")) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
+  credentials: true
 }));
 app.use(express.json());
 

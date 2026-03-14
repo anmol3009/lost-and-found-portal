@@ -29,7 +29,7 @@ export function FoundForm() {
 
     const result = await res.json();
     if (result.success) {
-      toast.success("Found item saved locally!", {
+      toast.success("Item Uploaded, wait for admin's approval", {
         description: `${data.get("itemName")} added successfully.`,
       });
       form.reset();

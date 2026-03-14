@@ -8,11 +8,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 
 type Item = {
-  id: number;
+  id: string;           // Firestore uses string IDs, not numbers
   itemName: string;
   locationFound: string;
   description: string;
-  photoPath?: string;
+  photoURL?: string;    // changed from photoPath to photoURL
   dateFound?: string;
   uploaderName?: string;
   contact?: string;
@@ -23,40 +23,37 @@ function ClaimItemDialog({ item }: { item: Item }) {
   const [submitting, setSubmitting] = useState(false);
 
   const onSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-  e.preventDefault();
-  const form = e.currentTarget;
-  const data = new FormData(form);
-  setSubmitting(true);
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    setSubmitting(true);
 
-  try {
-    // 👇 Send data to backend
-    const res = await fetch("http://localhost:5000/api/claims", {
-      method: "POST",
-      body: data,
-    });
-
-    const result = await res.json();
-    console.log("Claim response:", result);
-
-    if (result.success) {
-      toast.success("Claim submitted successfully!", {
-        description: `Your claim for "${item.itemName}" has been recorded.`,
+    try {
+      const res = await fetch("http://localhost:5000/api/claims", {
+        method: "POST",
+        body: data,
       });
-      form.reset();
-      setOpen(false);
-    } else {
-      toast.error("Failed to submit claim", {
-        description: result.error || "Please try again later.",
-      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        toast.success("Claim submitted successfully!", {
+          description: `Your claim for "${item.itemName}" has been recorded.`,
+        });
+        form.reset();
+        setOpen(false);
+      } else {
+        toast.error("Failed to submit claim", {
+          description: result.error || "Please try again later.",
+        });
+      }
+    } catch (error) {
+      console.error("Error submitting claim:", error);
+      toast.error("Error while submitting claim. Check console for details.");
+    } finally {
+      setSubmitting(false);
     }
-  } catch (error) {
-    console.error("Error submitting claim:", error);
-    toast.error("Error while submitting claim. Check console for details.");
-  } finally {
-    setSubmitting(false);
-  }
-};
-
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -96,10 +93,16 @@ export function ItemsGallery() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/found/approved") // ✅ fixed endpoint
+    fetch("http://localhost:5000/api/found/approved")
       .then((res) => res.json())
-      .then((data) => setItems(data))
-      .catch((err) => console.error("❌ Error fetching items:", err))
+      .then((data) => {
+        // Safety check — if server returns an error object, default to empty array
+        setItems(Array.isArray(data) ? data : []);
+      })
+      .catch((err) => {
+        console.error("❌ Error fetching items:", err);
+        setItems([]);
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -119,7 +122,7 @@ export function ItemsGallery() {
             <Card key={item.id} className="overflow-hidden border shadow-md transition hover:shadow-lg">
               <div className="aspect-[4/3] w-full overflow-hidden bg-muted">
                 <img
-                  src={`http://localhost:5000${item.photoPath}` || "/placeholder.jpg"}
+                  src={item.photoURL || "/placeholder.jpg"}
                   alt={item.itemName}
                   className="h-full w-full object-cover"
                 />

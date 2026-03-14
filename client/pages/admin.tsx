@@ -11,27 +11,23 @@ export default function AdminPage() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
 
-  const ADMIN_PASSWORD = "pass@123"; // change if needed
+  const ADMIN_PASSWORD = "pass@123";
 
-  // ✅ LOGIN HANDLER
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     if (password === ADMIN_PASSWORD) {
       setIsAuthenticated(true);
       toast.success("Access granted");
-      fetchAllData();
-      fetchItems();
     } else {
       toast.error("Incorrect password");
     }
   };
 
-  // ✅ FETCH FOUND ITEMS
   const fetchItems = async () => {
     try {
       const res = await fetch("http://localhost:5000/api/found");
       const data = await res.json();
-      setItems(data);
+      setItems(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error(err);
       toast.error("Failed to load found items");
@@ -40,16 +36,15 @@ export default function AdminPage() {
     }
   };
 
-  // ✅ FETCH LOST & CLAIM DATA TOGETHER
   const fetchAllData = async () => {
     try {
       const lostRes = await fetch("http://localhost:5000/api/lost");
       const lostData = await lostRes.json();
-      setLostReports(lostData);
+      setLostReports(Array.isArray(lostData) ? lostData : []);
 
       const claimRes = await fetch("http://localhost:5000/api/claims");
       const claimData = await claimRes.json();
-      setClaims(claimData);
+      setClaims(Array.isArray(claimData) ? claimData : []);
     } catch (error) {
       console.error("Error fetching data:", error);
       toast.error("Failed to load data");
@@ -64,14 +59,14 @@ export default function AdminPage() {
   }, [isAuthenticated]);
 
   // ✅ APPROVE FOUND ITEM
-  const handleApprove = async (id: number) => {
+  const handleApprove = async (id: string) => {
     try {
       const res = await fetch(`http://localhost:5000/api/found/${id}/approve`, {
         method: "PATCH",
       });
       const data = await res.json();
       if (data.success) {
-        toast.success(`Report ${id} approved!`);
+        toast.success("Item approved!");
         fetchItems();
       }
     } catch (error) {
@@ -80,77 +75,79 @@ export default function AdminPage() {
     }
   };
 
-  // Delete Claim
-const handleDelete = async (id: number) => {
-  if (!confirm("Are you sure you want to delete this claim?")) return;
-
-  try {
-    const res = await fetch(`http://localhost:5000/api/deleteClaim/${id}`, {
-      method: "DELETE",
-    });
-    if (res.ok) {
-      alert("Claim deleted successfully!");
-      fetchAllData(); // 👈 refresh data here
-    } else {
-      alert("Failed to delete claim.");
+  // ✅ DELETE FOUND ITEM
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this item?")) return;
+    try {
+      const res = await fetch(`http://localhost:5000/api/found/${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Item deleted!");
+        fetchItems();
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete item");
     }
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-// Update Status (Approve/Reject)
-const handleUpdateStatus = async (id: number, status: string) => {
-  try {
-    const res = await fetch(`http://localhost:5000/api/updateClaim/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    });
-    if (res.ok) {
-      alert(`Claim ${status} successfully!`);
-      fetchAllData(); // 👈 refresh data here
-    } else {
-      alert("Failed to update claim status.");
-    }
-  } catch (err) {
-    console.error(err);
-  }
-};
-
-
-  // ✅ DELETE LOST REPORT
-  const handleDeleteLost = async (id: number) => {
-    if (!confirm("Delete this lost report?")) return;
-    await fetch(`http://localhost:5000/api/lost/${id}`, { method: "DELETE" });
-    toast.success("Lost report deleted!");
-    fetchAllData();
   };
 
-  // ✅ EDIT LOST REPORT (placeholder)
+  // ✅ DELETE LOST REPORT
+  const handleDeleteLost = async (id: string) => {
+    if (!confirm("Delete this lost report?")) return;
+    try {
+      await fetch(`http://localhost:5000/api/lost/${id}`, { method: "DELETE" });
+      toast.success("Lost report deleted!");
+      fetchAllData();
+    } catch (err) {
+      toast.error("Failed to delete lost report");
+    }
+  };
+
   const handleEditLost = (report: any) => {
-    console.log("Edit Lost Item:", report);
     toast.info("Edit feature coming soon!");
   };
 
-  // ✅ APPROVE CLAIM
-  const handleApproveClaim = async (id: number) => {
-    await fetch(`http://localhost:5000/api/claims/${id}/approve`, {
-      method: "PATCH",
-    });
-    toast.success("Claim approved!");
-    fetchAllData();
-  };
-
-  // ✅ DELETE CLAIM
-  const handleDeleteClaim = async (id: number) => {
+  // ✅ DELETE CLAIM — uses correct endpoint /api/claims/:id
+  const handleDeleteClaim = async (id: string) => {
     if (!confirm("Delete this claim?")) return;
-    await fetch(`http://localhost:5000/api/claims/${id}`, { method: "DELETE" });
-    toast.success("Claim deleted!");
-    fetchAllData();
+    try {
+      const res = await fetch(`http://localhost:5000/api/claims/${id}`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Claim deleted!");
+        fetchAllData();
+      } else {
+        toast.error("Failed to delete claim");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete claim");
+    }
   };
 
-  // ✅ LOGIN SCREEN
+  // ✅ APPROVE CLAIM — uses correct endpoint /api/claims/:id/approve
+  const handleApproveClaim = async (id: string) => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/claims/${id}/approve`, {
+        method: "PATCH",
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Claim approved!");
+        fetchAllData();
+      } else {
+        toast.error("Failed to approve claim");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to approve claim");
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="flex items-center justify-center h-screen bg-gray-100">
@@ -174,21 +171,20 @@ const handleUpdateStatus = async (id: number, status: string) => {
     );
   }
 
-  // ✅ LOADING STATE
   if (loading) return <p className="text-center mt-8">Loading reports...</p>;
 
   return (
     <div className="container mx-auto p-6 space-y-12">
-      {/* ---------------- FOUND ITEMS ---------------- */}
-      <h1 className="text-3xl font-bold mb-6">Admin Panel — Review Reports</h1>
 
+      {/* FOUND ITEMS */}
+      <h1 className="text-3xl font-bold mb-6">Admin Panel — Review Reports</h1>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {items.map((item) => (
           <Card key={item.id} className="overflow-hidden shadow-md border">
             <div className="aspect-[4/3] bg-muted">
-              {item.photoPath ? (
+              {item.photoURL ? (
                 <img
-                  src={`http://localhost:5000${item.photoPath}`}
+                  src={item.photoURL}
                   alt={item.itemName}
                   className="h-full w-full object-cover"
                 />
@@ -203,11 +199,8 @@ const handleUpdateStatus = async (id: number, status: string) => {
               <p className="text-sm text-gray-500">{item.locationFound}</p>
               <p className="text-xs text-gray-500">{item.dateFound}</p>
               <p className="mt-2 text-sm">{item.description}</p>
-              <p className="text-xs text-gray-500 mt-2">
-                Uploader: {item.uploaderName}
-              </p>
+              <p className="text-xs text-gray-500 mt-2">Uploader: {item.uploaderName}</p>
               <p className="text-xs text-gray-500">Contact: {item.contact}</p>
-
               <div className="mt-4 flex gap-2">
                 {!item.approved ? (
                   <Button
@@ -232,12 +225,11 @@ const handleUpdateStatus = async (id: number, status: string) => {
           </Card>
         ))}
       </div>
-
       {items.length === 0 && (
         <p className="text-center mt-10 text-gray-500">No reports yet.</p>
       )}
 
-      {/* ---------------- LOST ITEM REPORTS ---------------- */}
+      {/* LOST ITEM REPORTS */}
       <div>
         <h2 className="text-2xl font-bold mt-12 mb-4">Lost Item Reports</h2>
         <div className="overflow-x-auto">
@@ -261,30 +253,29 @@ const handleUpdateStatus = async (id: number, status: string) => {
                     <td className="py-2 px-4 border">{report.locationLost}</td>
                     <td className="py-2 px-4 border">{report.dateLost}</td>
                     <td className="py-2 px-4 border">{report.description}</td>
-                    <td className="py-2 px-4 border">{report.reporterName}</td>
+                    <td className="py-2 px-4 border">{report.ownerName}</td>
                     <td className="py-2 px-4 border">{report.contact}</td>
-                    <td className="py-2 px-4 border flex gap-2 justify-center">
-                      <button
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-                        onClick={() => handleEditLost(report)}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                        onClick={() => handleDeleteLost(report.id)}
-                      >
-                        Delete
-                      </button>
+                    <td className="py-2 px-4 border">
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
+                          onClick={() => handleEditLost(report)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                          onClick={() => handleDeleteLost(report.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="text-center py-4 text-gray-500 border"
-                  >
+                  <td colSpan={7} className="text-center py-4 text-gray-500 border">
                     No lost reports found.
                   </td>
                 </tr>
@@ -294,7 +285,7 @@ const handleUpdateStatus = async (id: number, status: string) => {
         </div>
       </div>
 
-      {/* ---------------- ITEM CLAIMS ---------------- */}
+      {/* ITEM CLAIMS */}
       <div>
         <h2 className="text-2xl font-bold mt-12 mb-4">Item Claims</h2>
         <div className="overflow-x-auto">
@@ -318,28 +309,27 @@ const handleUpdateStatus = async (id: number, status: string) => {
                     <td className="py-2 px-4 border">{claim.contact}</td>
                     <td className="py-2 px-4 border">{claim.proof}</td>
                     <td className="py-2 px-4 border">{claim.status}</td>
-                    <td className="py-2 px-4 border flex gap-2 justify-center">
-                      <button
-                        className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
-                        onClick={() => handleApproveClaim(claim.id)}
-                      >
-                        Approve
-                      </button>
-                      <button
-                        className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                        onClick={() => handleDeleteClaim(claim.id)}
-                      >
-                        Delete
-                      </button>
+                    <td className="py-2 px-4 border">
+                      <div className="flex gap-2 justify-center">
+                        <button
+                          className="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded"
+                          onClick={() => handleApproveClaim(claim.id)}
+                        >
+                          Approve
+                        </button>
+                        <button
+                          className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                          onClick={() => handleDeleteClaim(claim.id)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td
-                    colSpan={6}
-                    className="text-center py-4 text-gray-500 border"
-                  >
+                  <td colSpan={6} className="text-center py-4 text-gray-500 border">
                     No claims found.
                   </td>
                 </tr>

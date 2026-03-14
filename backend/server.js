@@ -1,235 +1,304 @@
 import express from "express";
-import sqlite3 from "sqlite3";
 import multer from "multer";
 import cors from "cors";
-import path from "path";
-import fs from "fs";
-import { fileURLToPath } from "url";
+import { initializeApp, cert } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { createRequire } from "module";
+import { v2 as cloudinary } from "cloudinary";
+import { Readable } from "stream";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// ===========================
+//   FIREBASE ADMIN SETUP
+//   (Firestore only — no Firebase Storage needed)
+// ===========================
+const require = createRequire(import.meta.url);
+const serviceAccount = require("./serviceAccountKey.json");
 
+initializeApp({
+  credential: cert(serviceAccount),
+});
+
+const db = getFirestore();
+
+// ===========================
+//   CLOUDINARY SETUP
+// ===========================
+cloudinary.config({
+  cloud_name: "dc0gc2trv",
+  api_key: "553745188816963",
+  api_secret: "iGJaoFynxByqzX4IawlYGT4GYM4",
+});
+
+// ===========================
+//   EXPRESS SETUP
+// ===========================
 const app = express();
 const PORT = 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// === Database setup ===
-const db = new sqlite3.Database("lost_found.db");
-
-// === Create all tables ===
-db.serialize(() => {
-  db.run(`CREATE TABLE IF NOT EXISTS found_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    itemName TEXT,
-    locationFound TEXT,
-    dateFound TEXT,
-    uploaderName TEXT,
-    description TEXT,
-    contact TEXT,
-    photoPath TEXT,
-    approved BOOLEAN DEFAULT 0,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS lost_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    itemName TEXT,
-    locationLost TEXT,
-    dateLost TEXT,
-    ownerName TEXT,
-    description TEXT,
-    contact TEXT,
-    photoPath TEXT,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS claims (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  itemId INTEGER,
-  name TEXT,
-  contact TEXT,
-  proof TEXT,
-  status TEXT DEFAULT 'Pending',
-  timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-)`);
-
-});
-
-// === File Upload Setup ===
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const uploadPath = path.join(__dirname, "uploads");
-    if (!fs.existsSync(uploadPath)) fs.mkdirSync(uploadPath);
-    cb(null, uploadPath);
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + "-" + file.originalname);
-  },
-});
-const upload = multer({ storage });
+// Multer stores file in memory — no local disk writes
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ===========================
-//        FOUND ITEMS
+//   HELPER: Upload photo to Cloudinary
 // ===========================
-app.post("/api/found", upload.single("photo"), (req, res) => {
-  const { itemName, locationFound, dateFound, uploaderName, description, contact } = req.body;
-  const photoPath = req.file ? `/uploads/${req.file.filename}` : null;
+async function uploadPhoto(file) {
+  if (!file) return null;
 
-  db.run(
-    `INSERT INTO found_items (itemName, locationFound, dateFound, uploaderName, description, contact, photoPath, approved)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 0)`,
-    [itemName, locationFound, dateFound, uploaderName, description, contact, photoPath],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true, id: this.lastID });
-    }
-  );
-});
-
-app.get("/api/found", (req, res) => {
-  db.all("SELECT * FROM found_items ORDER BY timestamp DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.get("/api/found/approved", (req, res) => {
-  db.all("SELECT * FROM found_items WHERE approved = 1 ORDER BY timestamp DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.get("/api/reports", (req, res) => {
-  db.all("SELECT * FROM found_items WHERE approved = 1 ORDER BY timestamp DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
-  });
-});
-
-app.patch("/api/found/:id/approve", (req, res) => {
-  const { id } = req.params;
-  db.run("UPDATE found_items SET approved = 1 WHERE id = ?", [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, id });
-  });
-});
-
-app.delete("/api/found/:id", (req, res) => {
-  const { id } = req.params;
-  db.run("DELETE FROM found_items WHERE id = ?", [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true, id });
-  });
-});
-
-// ===========================
-//        LOST ITEMS
-// ===========================
-// Save Lost Item
-app.post("/api/lost", upload.single("photo"), (req, res) => {
-  console.log("Lost report received:", req.body);
-  console.log("File uploaded:", req.file);
-
-  const { itemName, locationLost, dateLost, ownerName, description, contact } = req.body;
-  const photoPath = req.file ? `/uploads/${req.file.filename}` : null;
-
-  db.run(
-    `INSERT INTO lost_items (itemName, locationLost, dateLost, ownerName, description, contact, photoPath)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [itemName, locationLost, dateLost, ownerName, description, contact, photoPath],
-    function (err) {
-      if (err) {
-        console.error("Database insert error:", err);
-        return res.status(500).json({ error: err.message });
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: "lost-found-portal",
+        resource_type: "image",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve(result.secure_url); // permanent https:// URL stored in Firestore
       }
-      res.json({ success: true, id: this.lastID });
-    }
-  );
-});
-
-
-// ✅ Fetch all lost reports
-app.get("/api/lost", (req, res) => {
-  db.all("SELECT * FROM lost_items ORDER BY timestamp DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json(rows);
+    );
+    Readable.from(file.buffer).pipe(stream);
   });
-});
+}
 
 // ===========================
-//          CLAIMS
+//   FOUND ITEMS
 // ===========================
-app.post("/api/claims", upload.none(), (req, res) => {
-  console.log("Claim received:", req.body);
-  const { name, contact, proof } = req.body;
-  const { itemId } = req.query || req.body; // optional if sent with item
 
-  if (!name || !contact || !proof) {
-    return res.status(400).json({ success: false, error: "All fields are required" });
+// POST — submit a found item (pending approval)
+app.post("/api/found", upload.single("photo"), async (req, res) => {
+  try {
+    const { itemName, locationFound, dateFound, uploaderName, description, contact } = req.body;
+    const photoURL = await uploadPhoto(req.file);
+
+    const docRef = await db.collection("found_items").add({
+      itemName,
+      locationFound,
+      dateFound,
+      uploaderName,
+      description,
+      contact,
+      photoURL,
+      approved: false,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.json({ success: true, id: docRef.id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
-
-  db.run(
-    `INSERT INTO claims (itemId, name, contact, proof, status)
-     VALUES (?, ?, ?, ?, 'Pending')`,
-    [itemId || null, name, contact, proof],
-    function (err) {
-      if (err) {
-        console.error("DB Insert Error:", err);
-        return res.status(500).json({ success: false, error: err.message });
-      }
-      res.json({ success: true, id: this.lastID });
-    }
-  );
 });
 
-
-// ✅ Fetch all claims
-app.get("/api/claims", (req, res) => {
-  db.all("SELECT * FROM claims ORDER BY timestamp DESC", [], (err, rows) => {
-    if (err) return res.status(500).json({ error: err.message });
+// GET — all found items (admin use)
+app.get("/api/found", async (req, res) => {
+  try {
+    const snapshot = await db.collection("found_items").get();
+    const rows = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
     res.json(rows);
-  });
-});
-// ✅ UPDATE found item
-app.put("/api/found/:id", (req, res) => {
-  const { id } = req.params;
-  const { itemName, locationFound, dateFound, uploaderName, description, contact } = req.body;
-
-  db.run(
-    `UPDATE found_items 
-     SET itemName = ?, locationFound = ?, dateFound = ?, uploaderName = ?, description = ?, contact = ? 
-     WHERE id = ?`,
-    [itemName, locationFound, dateFound, uploaderName, description, contact, id],
-    function (err) {
-      if (err) return res.status(500).json({ error: err.message });
-      res.json({ success: true });
-    }
-  );
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ✅ DELETE found item
-app.delete("/api/found/:id", (req, res) => {
-  const { id } = req.params;
-  db.run(`DELETE FROM found_items WHERE id = ?`, [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
+// GET — only approved found items (public gallery)
+app.get("/api/found/approved", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("found_items")
+      .where("approved", "==", true)
+      .get();
+
+    const rows = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Same as /api/found/approved — kept for backward compatibility
+app.get("/api/reports", async (req, res) => {
+  try {
+    const snapshot = await db
+      .collection("found_items")
+      .where("approved", "==", true)
+      .get();
+
+    const rows = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH — approve a found item
+app.patch("/api/found/:id/approve", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection("found_items").doc(id).update({ approved: true });
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT — edit a found item
+app.put("/api/found/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { itemName, locationFound, dateFound, uploaderName, description, contact } = req.body;
+
+    await db.collection("found_items").doc(id).update({
+      itemName,
+      locationFound,
+      dateFound,
+      uploaderName,
+      description,
+      contact,
+    });
+
     res.json({ success: true });
-  });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// ✅ DELETE claim
-app.delete("/api/claims/:id", (req, res) => {
-  const { id } = req.params;
-  db.run(`DELETE FROM claims WHERE id = ?`, [id], function (err) {
-    if (err) return res.status(500).json({ error: err.message });
-    res.json({ success: true });
-  });
+// DELETE — delete a found item
+app.delete("/api/found/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection("found_items").doc(id).delete();
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ===========================
-//          SERVER
+//   LOST ITEMS
+// ===========================
+
+// POST — submit a lost item report
+app.post("/api/lost", upload.single("photo"), async (req, res) => {
+  try {
+    const { itemName, locationLost, dateLost, ownerName, description, contact } = req.body;
+    const photoURL = await uploadPhoto(req.file);
+
+    const docRef = await db.collection("lost_items").add({
+      itemName,
+      locationLost,
+      dateLost,
+      ownerName,
+      description,
+      contact,
+      photoURL,
+      timestamp: new Date().toISOString(),
+    });
+
+    res.json({ success: true, id: docRef.id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET — all lost items
+app.get("/api/lost", async (req, res) => {
+  try {
+    const snapshot = await db.collection("lost_items").get();
+    const rows = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===========================
+//   CLAIMS
+// ===========================
+
+// POST — submit a claim
+app.post("/api/claims", upload.none(), async (req, res) => {
+  try {
+    const { name, contact, proof, itemId } = req.body;
+
+    if (!name || !contact || !proof) {
+      return res.status(400).json({ success: false, error: "All fields are required" });
+    }
+
+    const docRef = await db.collection("claims").add({
+      itemId: itemId || null,
+      name,
+      contact,
+      proof,
+      status: "Pending",
+      timestamp: new Date().toISOString(),
+    });
+
+    res.json({ success: true, id: docRef.id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET — all claims
+app.get("/api/claims", async (req, res) => {
+  try {
+    const snapshot = await db.collection("claims").get();
+    const rows = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+    res.json(rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE — delete a claim
+app.delete("/api/claims/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection("claims").doc(id).delete();
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// PATCH — approve a claim
+app.patch("/api/claims/:id/approve", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection("claims").doc(id).update({ status: "Approved" });
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE — delete a lost item
+app.delete("/api/lost/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.collection("lost_items").doc(id).delete();
+    res.json({ success: true, id });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===========================
+//   SERVER
 // ===========================
 app.listen(PORT, () => console.log(`✅ Server running on http://localhost:${PORT}`));

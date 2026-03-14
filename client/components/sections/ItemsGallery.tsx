@@ -29,7 +29,7 @@ function ClaimItemDialog({ item }: { item: Item }) {
     setSubmitting(true);
 
     try {
-      const res = await fetch("http://localhost:5000/api/claims", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/claims`, {
         method: "POST",
         body: data,
       });
@@ -93,7 +93,7 @@ export function ItemsGallery() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/found/approved")
+    fetch(`${import.meta.env.VITE_API_URL}/api/found/approved`)
       .then((res) => res.json())
       .then((data) => {
         // Safety check — if server returns an error object, default to empty array

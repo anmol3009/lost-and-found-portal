@@ -22,7 +22,7 @@ export function FoundForm() {
 
   setSubmitting(true);
   try {
-    const res = await fetch("http://localhost:5000/api/found", {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/found`, {
       method: "POST",
       body: data,
     });

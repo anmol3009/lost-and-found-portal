@@ -25,7 +25,7 @@ export default function AdminPage() {
 
   const fetchItems = async () => {
     try {
-      const res = await fetch("http://localhost:5000/api/found");
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/found`);
       const data = await res.json();
       setItems(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -38,11 +38,11 @@ export default function AdminPage() {
 
   const fetchAllData = async () => {
     try {
-      const lostRes = await fetch("http://localhost:5000/api/lost");
+      const lostRes = await fetch(`${import.meta.env.VITE_API_URL}/api/lost`);
       const lostData = await lostRes.json();
       setLostReports(Array.isArray(lostData) ? lostData : []);
 
-      const claimRes = await fetch("http://localhost:5000/api/claims");
+      const claimRes = await fetch(`${import.meta.env.VITE_API_URL}/api/claims`);
       const claimData = await claimRes.json();
       setClaims(Array.isArray(claimData) ? claimData : []);
     } catch (error) {
@@ -61,7 +61,7 @@ export default function AdminPage() {
   // ✅ APPROVE FOUND ITEM
   const handleApprove = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/found/${id}/approve`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/found/${id}/approve`, {
         method: "PATCH",
       });
       const data = await res.json();
@@ -79,7 +79,7 @@ export default function AdminPage() {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this item?")) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/found/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/found/${id}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -97,7 +97,7 @@ export default function AdminPage() {
   const handleDeleteLost = async (id: string) => {
     if (!confirm("Delete this lost report?")) return;
     try {
-      await fetch(`http://localhost:5000/api/lost/${id}`, { method: "DELETE" });
+      await fetch(`${import.meta.env.VITE_API_URL}/api/lost/${id}`, { method: "DELETE" });
       toast.success("Lost report deleted!");
       fetchAllData();
     } catch (err) {
@@ -113,7 +113,7 @@ export default function AdminPage() {
   const handleDeleteClaim = async (id: string) => {
     if (!confirm("Delete this claim?")) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/claims/${id}`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/claims/${id}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -132,7 +132,7 @@ export default function AdminPage() {
   // ✅ APPROVE CLAIM — uses correct endpoint /api/claims/:id/approve
   const handleApproveClaim = async (id: string) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/claims/${id}/approve`, {
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/claims/${id}/approve`, {
         method: "PATCH",
       });
       const data = await res.json();

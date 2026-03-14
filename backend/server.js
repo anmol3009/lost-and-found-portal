@@ -35,7 +35,13 @@ cloudinary.config({
 const app = express();
 const PORT = 5000;
 
-app.use(cors());
+app.use(cors({
+  origin: [
+    "http://localhost:8080",
+    "http://localhost:5173",
+    "https://lost-and-found-portal-x32w.onrender.com"
+  ]
+}));
 app.use(express.json());
 
 // Multer stores file in memory — no local disk writes

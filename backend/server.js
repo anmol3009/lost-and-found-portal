@@ -39,7 +39,7 @@ app.use(cors({
   origin: [
     "http://localhost:8080",
     "http://localhost:5173",
-    "https://lost-and-found-portal-x32w.onrender.com"
+    "https://lost-and-found-portal-alpha.vercel.app"
   ]
 }));
 app.use(express.json());
